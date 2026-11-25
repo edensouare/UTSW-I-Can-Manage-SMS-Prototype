@@ -24,8 +24,27 @@ function stamp(){return new Date().toLocaleTimeString([],{hour:'numeric',minute:
 function syncClock(){const c=$('#clock');if(c)c.textContent=stamp().replace(/\s*[AP]M$/i,'')}
 function unlockAudio(){try{const Ctx=window.AudioContext||window.webkitAudioContext;if(!Ctx)return null;audioCtx=audioCtx||new Ctx();if(audioCtx.state==='suspended')audioCtx.resume().catch(()=>{});return audioCtx}catch{return null}}
 function pingSound(){try{const ctx=unlockAudio();if(!ctx)return;const play=()=>{const t=ctx.currentTime;[[659.25,0,0.028,0.16],[987.77,0.055,0.022,0.22]].forEach(([freq,offset,peak,dur])=>{const osc=ctx.createOscillator(),gain=ctx.createGain();osc.type='sine';osc.frequency.setValueAtTime(freq,t+offset);gain.gain.setValueAtTime(0.0001,t+offset);gain.gain.exponentialRampToValueAtTime(peak,t+offset+0.015);gain.gain.exponentialRampToValueAtTime(0.0001,t+offset+dur);osc.connect(gain);gain.connect(ctx.destination);osc.start(t+offset);osc.stop(t+offset+dur+0.01)})};if(ctx.state==='suspended')ctx.resume().then(play).catch(()=>{});else play()}catch{}}
-function reset(){S={on:false,ctx:null,msgs:[],q:[],mc:null,signed:false};$('#prefs').reset();$('#settings').open=true;$('.scr').classList.remove('large');$('.dev')?.classList.remove('ping');sync();render()}
+function reset(){S={on:false,ctx:null,msgs:[],q:[],mc:null,signed:false};const i=$('#ti');if(i)i.value='';$('#prefs').reset();$('#settings').open=true;$('.scr').classList.remove('large');$('.dev')?.classList.remove('ping');sync();render()}
 function say(t,o){if(!S.startedAt)S.startedAt=stamp();S.msgs.push(Object.assign({a:1,t,ts:stamp()},o||{}));S.ping=true}
+function syncSend(){const b=$('.snd'),i=$('#ti');if(!b||!i)return;const has=!!(S?.on&&i.value.trim());b.classList.toggle('hide',!has);b.disabled=!has||!!S.busy}
+let scrollTimer;
+function syncScrollBar(show){
+  const th=$('#th'),thw=$('#thw'),bar=$('#th-bar'),thumb=bar?.firstElementChild;
+  if(!th||!bar||!thumb||!thumb.style)return;
+  const ch=th.clientHeight||0,sh=th.scrollHeight||0,track=bar.clientHeight||Math.max(0,ch-8);
+  if(sh<=ch+1||track<=0){bar.classList.remove('on');thumb.style.height='0px';return}
+  const h=Math.max(24,Math.round(track*(ch/sh)));
+  const maxScroll=Math.max(1,sh-ch);
+  const top=Math.min(Math.max(0,track-h),Math.round((th.scrollTop/maxScroll)*Math.max(0,track-h)));
+  thumb.style.height=h+'px';
+  thumb.style.transform=`translateY(${top}px)`;
+  bar.classList.add('on');
+  if(show&&thw){
+    thw.classList.add('scrolling');
+    clearTimeout(scrollTimer);
+    scrollTimer=setTimeout(()=>thw.classList.remove('scrolling'),900);
+  }
+}
 function sync(){$('#on').disabled=S.on;$('#off').classList.toggle('hide',!S.on);$('#on').classList.toggle('hide',S.on);$('#sRem').disabled=$('#sRes').disabled=!S.on||S.busy;const st=$('#stat');if(st){st.textContent=S.on?'On':'Off';st.classList.toggle('on',S.on)}}
 function reminders(){const r=[...document.querySelectorAll('.rem')].filter(c=>c.checked).map(c=>c.value);return r.length?r.join(', '):'managed in your MyChart account'}
 const savedKey='utsw-icm.saved-modules.v1';
@@ -49,7 +68,7 @@ function downloadPicture(src,caption){
  const badge=document.createElement('span');
  const ns='http://www.w3.org/2000/svg';
  const svg=document.createElementNS(ns,'svg');
- svg.setAttribute('width','17');svg.setAttribute('height','17');svg.setAttribute('viewBox','0 0 24 24');
+ svg.setAttribute('width','15');svg.setAttribute('height','15');svg.setAttribute('viewBox','0 0 24 24');
  svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width','2');
  svg.setAttribute('stroke-linecap','round');svg.setAttribute('stroke-linejoin','round');
  svg.setAttribute('aria-hidden','true');
@@ -121,16 +140,18 @@ S.msgs.forEach(m=>{const d=document.createElement('div');d.className='m'+(m.a?''
 if(m.lk||m.slide?.lk){const lk=m.lk||m.slide.lk;if(LK[lk]){const b=document.createElement('button');b.className='lk';b.textContent=LK[lk];b.onclick=()=>openMC(lk);d.append(b)}}
 th.append(d);
 if(m.ts){const tm=mk('div','mt'+(m.a?'':' me'),m.ts);th.append(tm)}
-if(m.slide?.image){const src=m.slide.photo||m.slide.image;const row=mk('div','pic-row');const frame=mk('a','pic');frame.href=m.slide.image;frame.target='_blank';frame.rel='noopener';const img=mk('img');img.src=src;img.alt=m.slide.caption||'Module picture';img.onerror=()=>row.remove();frame.append(img,mk('span','',m.slide.caption||''));row.append(frame,downloadPicture(src,m.slide.caption));th.append(row)}
+if(m.slide?.image){const src=m.slide.photo||m.slide.image;const row=mk('div','pic-row');const frame=mk('div','pic');const img=mk('img');img.src=src;img.alt=m.slide.caption||'Module picture';img.onload=()=>{th.scrollTop=th.scrollHeight;syncScrollBar(false)};img.onerror=()=>{row.remove();syncScrollBar(false)};frame.append(img);row.append(frame,downloadPicture(src,m.slide.caption));th.append(row)}
 });
 const last=S.msgs[S.msgs.length-1];
 if(last&&!last.a){const dl=document.createElement('div');dl.className='dl';dl.textContent='Delivered';th.append(dl)}
 if(S.busy){const dots=mk('div','typing','•••');dots.setAttribute('role','status');dots.setAttribute('aria-label','UTSW ICM is typing');th.append(dots)}
 th.scrollTop=th.scrollHeight;
+syncScrollBar(false);
+if(typeof requestAnimationFrame==='function')requestAnimationFrame(()=>syncScrollBar(false));
 const q=$('#qr');q.innerHTML='';
 if(S.on&&!S.busy)S.q.forEach(([l,v])=>{const b=document.createElement('button');b.textContent=l;b.onclick=()=>{unlockAudio();go(v)};q.append(b)});
 q.classList.toggle('hide',!S.on||!S.q.length);
-$('.snd').disabled=!S.on||S.busy;$('#ti').disabled=!S.on;
+$('#ti').disabled=!S.on;syncSend();
 $('#tp').classList.toggle('hide',!!S.mc);$('#mp').classList.toggle('hide',!S.mc);
 if(S.mc)renderMC();
 if(S.ping){S.ping=false;pingSound();const dev=$('.dev');if(dev){dev.classList.remove('ping');void dev.offsetWidth;dev.classList.add('ping')}}
@@ -281,8 +302,12 @@ if($('#topic'))$('#topic').onchange=()=>{if(S.on&&(!S.ctx||S.ctx==='home')&&!S.b
 $('#sRem').onclick=()=>{unlockAudio();S.ctx='rem';say('Visit reminder (simulated demo): Thursday at 10 AM. Reply C to confirm or R to reschedule. Details:',{lk:'appt'});S.q=[['C','C'],['R','R']];render()};
 $('#sRes').onclick=()=>{unlockAudio();S.ctx=null;say('You have a new result in MyChart (simulated demo). For your privacy, results aren’t sent by text. View it securely:',{lk:'results'});S.q=MENUQ;render()};
 $('#rst').onclick=reset;
-$('#f').onsubmit=e=>{e.preventDefault();unlockAudio();const i=$('#ti');go(i.value);i.value=''};
+$('#f').onsubmit=e=>{e.preventDefault();unlockAudio();const i=$('#ti');go(i.value);i.value='';syncSend()};
+$('#ti')?.addEventListener?.('input',syncSend);
 $('#bk').onclick=()=>{S.mc=null;render()};
 $('.dev')?.addEventListener('animationend',e=>{if(e.animationName==='dev-flash')e.currentTarget.classList.remove('ping')});
+const thEl=$('#th');
+thEl?.addEventListener('scroll',()=>syncScrollBar(true),{passive:true});
+if(typeof window!=='undefined')window.addEventListener?.('resize',()=>syncScrollBar(false));
 syncClock();setInterval(syncClock,15000);
 reset();
