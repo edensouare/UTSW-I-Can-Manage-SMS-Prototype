@@ -188,8 +188,8 @@ try{
 $('#on').onclick=()=>{unlockAudio();S={on:true,ctx:null,msgs:[],q:[],request:S.request};$('#settings').open=false;menu();sync();render();$('#ti').focus()};
 $('#off').onclick=()=>{S={...S,on:false,busy:false,q:[]};$('#settings').open=true;sync();render()};
 if($('#topic'))$('#topic').onchange=()=>{if(S.on&&(!S.ctx||S.ctx==='home')&&!S.busy){S.q=withResume(homeChoices());render()}};
-$('#sRem').onclick=()=>{unlockAudio();S.ctx='rem';say('UTSW ICM visit reminder: Thursday at 10 AM. Reply C to confirm or R to reschedule. Details:',{lk:'appt'});S.q=[['C','C'],['R','R']];render()};
-$('#sRes').onclick=()=>{unlockAudio();S.ctx=null;say('UTSW ICM: you have a new result in MyChart. For your privacy, results aren’t sent by text. View it securely:',{lk:'results'});S.q=MENUQ;render()};
+$('#sRem').onclick=()=>{unlockAudio();S.ctx='rem';say('Visit reminder (simulated demo): Thursday at 10 AM. Reply C to confirm or R to reschedule. Details:',{lk:'appt'});S.q=[['C','C'],['R','R']];render()};
+$('#sRes').onclick=()=>{unlockAudio();S.ctx=null;say('You have a new result in MyChart (simulated demo). For your privacy, results aren’t sent by text. View it securely:',{lk:'results'});S.q=MENUQ;render()};
 $('#rst').onclick=reset;
 $('#f').onsubmit=e=>{e.preventDefault();unlockAudio();const i=$('#ti');go(i.value);i.value=''};
 $('#bk').onclick=()=>{S.mc=null;render()};

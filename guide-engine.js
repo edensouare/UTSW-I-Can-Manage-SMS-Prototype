@@ -238,7 +238,7 @@ async function answer(question, previous){
     const n=Number(bareNum[1]);
     if(n===1)return {text:guideReply('menu'),id:'mod-menu',q:modules.map(m=>[String(m.number),'GUIDE '+m.number])};
     if(n===2)return {text:'To request a visit, type "request a visit" or choose Request a visit from the menu.',q:choices('Request a visit','Menu')};
-    if(n===3)return {text:'You have no scheduled visits in this demo. View details in MyChart (simulated demo):',lk:'appt',q:choices('Menu')};
+    if(n===3)return {text:'You have no scheduled visits. View details in MyChart (simulated demo):',lk:'appt',q:choices('Menu')};
     if(n===4)return {text:'Your visit reminders are managed in your MyChart account (simulated demo).',lk:'set',q:choices('Menu')};
     if(n===5)return {
       text: 'Your results aren’t sent by text to protect your privacy. You can view them securely in MyChart (simulated demo):',
