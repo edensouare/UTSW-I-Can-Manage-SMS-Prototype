@@ -26,7 +26,7 @@ function unlockAudio(){try{const Ctx=window.AudioContext||window.webkitAudioCont
 function pingSound(){try{const ctx=unlockAudio();if(!ctx)return;const play=()=>{const t=ctx.currentTime;[[659.25,0,0.028,0.16],[987.77,0.055,0.022,0.22]].forEach(([freq,offset,peak,dur])=>{const osc=ctx.createOscillator(),gain=ctx.createGain();osc.type='sine';osc.frequency.setValueAtTime(freq,t+offset);gain.gain.setValueAtTime(0.0001,t+offset);gain.gain.exponentialRampToValueAtTime(peak,t+offset+0.015);gain.gain.exponentialRampToValueAtTime(0.0001,t+offset+dur);osc.connect(gain);gain.connect(ctx.destination);osc.start(t+offset);osc.stop(t+offset+dur+0.01)})};if(ctx.state==='suspended')ctx.resume().then(play).catch(()=>{});else play()}catch{}}
 function reset(){S={on:false,ctx:null,msgs:[],q:[],mc:null,signed:false};const i=$('#ti');if(i)i.value='';$('#prefs').reset();$('#settings').open=true;$('.scr').classList.remove('large');$('.dev')?.classList.remove('ping');sync();render()}
 function say(t,o){if(!S.startedAt)S.startedAt=stamp();S.msgs.push(Object.assign({a:1,t,ts:stamp()},o||{}));S.ping=true}
-function syncSend(){const b=$('.snd'),i=$('#ti');if(!b||!i)return;const has=!!(S?.on&&i.value.trim());b.classList.toggle('hide',!has);b.disabled=!has||!!S.busy}
+function syncSend(){const b=$('.snd'),i=$('#ti');if(!b||!i)return;const has=!!(S?.on&&i.value.trim());b.classList.toggle('hide',!has);b.hidden=!has;b.disabled=!has||!!S.busy}
 let scrollTimer;
 function syncScrollBar(show){
   const th=$('#th'),thw=$('#thw'),bar=$('#th-bar'),thumb=bar?.firstElementChild;
@@ -303,7 +303,8 @@ $('#sRem').onclick=()=>{unlockAudio();S.ctx='rem';say('Visit reminder (simulated
 $('#sRes').onclick=()=>{unlockAudio();S.ctx=null;say('You have a new result in MyChart (simulated demo). For your privacy, results aren’t sent by text. View it securely:',{lk:'results'});S.q=MENUQ;render()};
 $('#rst').onclick=reset;
 $('#f').onsubmit=e=>{e.preventDefault();unlockAudio();const i=$('#ti');go(i.value);i.value='';syncSend()};
-$('#ti')?.addEventListener?.('input',syncSend);
+const tiEl=$('#ti');
+if(tiEl?.addEventListener){['input','change','keyup','compositionend','focus'].forEach(ev=>tiEl.addEventListener(ev,syncSend));tiEl.addEventListener('paste',()=>setTimeout(syncSend,0))}
 $('#bk').onclick=()=>{S.mc=null;render()};
 $('.dev')?.addEventListener('animationend',e=>{if(e.animationName==='dev-flash')e.currentTarget.classList.remove('ping')});
 const thEl=$('#th');

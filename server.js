@@ -116,7 +116,9 @@ const server=http.createServer(async(req,res)=>{
   }
   const file=resolveStaticFile(urlPath);
   if(!file || !['GET','HEAD'].includes(req.method)){res.writeHead(404);return res.end()}
-  res.setHeader('Content-Type',MIME_TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream');
+  const ext=path.extname(file).toLowerCase();
+  res.setHeader('Content-Type',MIME_TYPES[ext] || 'application/octet-stream');
+  if(['.html','.js','.css','.json'].includes(ext))res.setHeader('Cache-Control','no-store');
   fs.createReadStream(file).pipe(res);
 });
 server.listen(process.env.PORT||3000,'0.0.0.0');
