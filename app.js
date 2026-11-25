@@ -1,3 +1,20 @@
+let pagesGuide;
+async function askGuide(question,previous){
+  if(location.hostname.endsWith('.github.io')){
+    if(!pagesGuide){
+      pagesGuide=Promise.all(['slides.json','cards.json','guide-images.json'].map(async file=>{
+        const response=await fetch(file);
+        if(!response.ok)throw Error('Guide download failed');
+        return response.json();
+      })).then(([slides,cards,files])=>createGuideEngine({slides,cards,images:new Set(files),modules,guideReply}))
+        .catch(error=>{pagesGuide=null;throw error});
+    }
+    return (await pagesGuide).answer(question,previous);
+  }
+  const response=await fetch('api/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question,previous})});
+  if(!response.ok)throw Error('Guide search failed');
+  return response.json();
+}
 const $=s=>document.querySelector(s);
 const MENU='I can help with:\n1 = ICM Learning Modules\n2 = My next visit\n3 = Reminders\n4 = Test results\n5 = Talk to my care team';
 const MQ=[['1 I Can Manage','1'],['2 My next visit','2'],['3 Reminders','3'],['4 Test results','4'],['5 Care team','5']];
@@ -159,9 +176,7 @@ if(T==='6')return care();
 }
 const session=S;
 try{
- const response=await fetch('/api/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:T,previous:S.slide})});
- if(!response.ok)throw Error();
- const reply=await response.json();
+ const reply=await askGuide(T,S.slide);
  if(S!==session||!S.on)return;
  say(reply.text,{slide:reply,lk:reply.lk});
  if(reply.id){S.ctx='mod';S.slide=reply.id;}
