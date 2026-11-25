@@ -28,6 +28,91 @@ function reset(){S={on:false,ctx:null,msgs:[],q:[],mc:null,signed:false};$('#pre
 function say(t,o){if(!S.startedAt)S.startedAt=stamp();S.msgs.push(Object.assign({a:1,t,ts:stamp()},o||{}));S.ping=true}
 function sync(){$('#on').disabled=S.on;$('#off').classList.toggle('hide',!S.on);$('#on').classList.toggle('hide',S.on);$('#sRem').disabled=$('#sRes').disabled=!S.on||S.busy;const st=$('#stat');if(st){st.textContent=S.on?'On':'Off';st.classList.toggle('on',S.on)}}
 function reminders(){const r=[...document.querySelectorAll('.rem')].filter(c=>c.checked).map(c=>c.value);return r.length?r.join(', '):'managed in your MyChart account'}
+const savedKey='utsw-icm.saved-modules.v1';
+let savedItems=[];
+try{
+ const entries=JSON.parse(localStorage.getItem(savedKey));
+ if(Array.isArray(entries))savedItems=entries.filter(item=>item && typeof item.text==='string' && typeof item.image==='string');
+}catch{}
+function sameItem(a,b){return a.text===b.text && a.image===b.image}
+function storeItems(items){
+ try{localStorage.setItem(savedKey,JSON.stringify(items));savedItems=items;return true}
+ catch{return false}
+}
+function isSaveableSlide(m){
+ return !!(m?.a && m.slide && ((m.slide.id && m.slide.id!=='mod-menu' && !m.slide.id.startsWith('topics:')) || m.slide.image));
+}
+function downloadPicture(src,caption){
+ const link=mk('a','ios-dl');
+ link.href=src;link.download='';
+ link.title='Save image';link.setAttribute('aria-label','Save '+(caption||'module image'));
+ const badge=document.createElement('span');
+ const ns='http://www.w3.org/2000/svg';
+ const svg=document.createElementNS(ns,'svg');
+ svg.setAttribute('width','17');svg.setAttribute('height','17');svg.setAttribute('viewBox','0 0 24 24');
+ svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width','2');
+ svg.setAttribute('stroke-linecap','round');svg.setAttribute('stroke-linejoin','round');
+ svg.setAttribute('aria-hidden','true');
+ ['M12 3v12','M7.5 10.5L12 15l4.5-4.5','M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4'].forEach(d=>{
+  const p=document.createElementNS(ns,'path');p.setAttribute('d',d);svg.append(p);
+ });
+ badge.append(svg);link.append(badge);
+ return link;
+}
+function openSaved(){
+ const list=$('#saved-list');
+ list.replaceChildren();
+ if(!savedItems.length)list.append(mk('p','','Reply SAVE after a module message to keep its information and pictures here.'));
+ for(const item of savedItems){
+   const card=mk('article');
+   if(item.caption)card.append(mk('h3','',item.caption));
+   card.append(mk('p','',item.text));
+   if(item.image){
+     const row=mk('div','saved-img-row');
+     const pic=mk('img');pic.src=item.image;pic.alt=item.caption||'Module picture';
+     row.append(pic,downloadPicture(item.image,item.caption));
+     card.append(row);
+   }
+   const remove=mk('button','save-action','Remove');
+   remove.onclick=()=>{
+     if(storeItems(savedItems.filter(entry=>!sameItem(entry,item)))){
+       openSaved();
+       $('#saved-items button').focus();
+     }
+   };
+   card.append(remove);list.append(card);
+ }
+ if(!$('#saved-items').open)$('#saved-items').showModal();
+}
+function saveLatestSlide(){
+ const target=S.msgs.slice().reverse().find(isSaveableSlide);
+ if(!target){
+   say('There isn’t a module message to save yet. Open a learning module or ask a question first.');
+   S.q=withResume([['ICM Learning Modules','GUIDES'],['Menu','MENU']]);
+   return;
+ }
+ const item={text:target.t,image:target.slide.image||'',caption:target.slide.caption||''};
+ const already=savedItems.some(entry=>sameItem(entry,item));
+ if(!already && !storeItems([item,...savedItems])){
+   say('Your browser could not update saved items on this device.');
+   S.q=target.slide.q||withResume(MENUQ);
+   return;
+ }
+ const prefix=already?'This information is already saved in your ICM assistant.':'Saved to your ICM assistant.';
+ if(S.slide==='trach-ready'){
+   say(prefix+' Reply READY when you have everything, or reply SAVED to view saved items.');
+   S.q=[['Ready','Ready'],['Saved items','SAVED'],['Menu','MENU']];
+ }else if(S.slide==='trach-check'){
+   say(prefix+' Reply YES, NO, or NOT SURE to continue, or reply SAVED to view saved items.');
+   S.q=[['Yes','Yes'],['No','No'],['Not sure','Not sure'],['Saved items','SAVED']];
+ }else if(target.slide.q?.some(([,val])=>val==='Next')){
+   say(prefix+' Reply NEXT to continue, or reply SAVED to view saved items.');
+   S.q=[['Next','Next'],['Saved items','SAVED'],['Menu','MENU']];
+ }else{
+   say(prefix+' Reply SAVED to view saved items, or ask another question.');
+   S.q=[['Saved items','SAVED'],['Modules','Modules'],['Menu','MENU']];
+ }
+}
 function render(){
 const th=$('#th');th.innerHTML='';
 if(!S.msgs.length)th.innerHTML='<div class="off">UTSW ICM is off.<br>Turn it on in MyChart settings to start.</div>';
@@ -36,7 +121,7 @@ S.msgs.forEach(m=>{const d=document.createElement('div');d.className='m'+(m.a?''
 if(m.lk||m.slide?.lk){const lk=m.lk||m.slide.lk;if(LK[lk]){const b=document.createElement('button');b.className='lk';b.textContent=LK[lk];b.onclick=()=>openMC(lk);d.append(b)}}
 th.append(d);
 if(m.ts){const tm=mk('div','mt'+(m.a?'':' me'),m.ts);th.append(tm)}
-if(m.slide?.image){const frame=mk('a','pic');frame.href=m.slide.image;frame.target='_blank';frame.rel='noopener';const img=mk('img');img.src=m.slide.photo||m.slide.image;img.alt=m.slide.caption||'';img.onerror=()=>frame.remove();frame.append(img,mk('span','',m.slide.caption||''));th.append(frame)}
+if(m.slide?.image){const src=m.slide.photo||m.slide.image;const row=mk('div','pic-row');const frame=mk('a','pic');frame.href=m.slide.image;frame.target='_blank';frame.rel='noopener';const img=mk('img');img.src=src;img.alt=m.slide.caption||'Module picture';img.onerror=()=>row.remove();frame.append(img,mk('span','',m.slide.caption||''));row.append(frame,downloadPicture(src,m.slide.caption));th.append(row)}
 });
 const last=S.msgs[S.msgs.length-1];
 if(last&&!last.a){const dl=document.createElement('div');dl.className='dl';dl.textContent='Delivered';th.append(dl)}
@@ -68,6 +153,9 @@ else{el.append(mk('h2','',t[0]),mk('p','mut2',t[1]));for(let i=0;i<4;i++){const 
 }
 async function go(text){
  const v=text.trim();if(!v||!S.on||S.busy)return;
+ const command=v.toUpperCase();
+ const homePick=S.ctx==='home' && /^\d+$/.test(v) && withResume(homeChoices())[Number(v)-1];
+ if(command==='SAVED'||command==='SAVED INFO AND PICTURES'||homePick?.[1]==='SAVED'){openSaved();return}
  const session=S;session.busy=true;session.msgs.push({a:0,t:v,ts:stamp()});session.q=[];render();sync();
  await new Promise(resolve=>setTimeout(resolve,650));
  if(session!==S||!S.on)return;
@@ -75,7 +163,7 @@ async function go(text){
 }
 function homeChoices(){
  const t=$('#topic');
- return [...(t&&t.value?[[t.selectedOptions[0].text,'GUIDE '+t.value]]:[]),['ICM Learning Modules','GUIDES'],['Request a visit','REQUEST VISIT'],['My visits','NEXT VISIT'],['Reminders','REMINDERS'],['Test results','RESULTS'],['Care team','CARE']];
+ return [...(t&&t.value?[[t.selectedOptions[0].text,'GUIDE '+t.value]]:[]),['ICM Learning Modules','GUIDES'],['Request a visit','REQUEST VISIT'],['My visits','NEXT VISIT'],['Reminders','REMINDERS'],['Test results','RESULTS'],['Care team','CARE'],['Saved info and pictures','SAVED']];
 }
 function withResume(options){return (S.slide && S.slide!=='mod-menu')?[['Resume guide','RESUME GUIDE'],...options]:options}
 function opener(returning){
@@ -125,9 +213,11 @@ async function respond(T){
 if(T==='STOP'){say('Texts are off.');S.on=false;S.q=[];$('#settings').open=true;sync();return}
 if(T==='MENU')return menu();
 if(S.ctx==='home' && /^\d+$/.test(T)){const pick=withResume(homeChoices())[Number(T)-1];if(pick)T=pick[1]}
+if(/^(SAVED|SAVED INFO AND PICTURES)$/.test(T))return openSaved();
+const clean=T.replace(/[’']/g,'').replace(/[^A-Z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+if(/^(?:SAVE|SAVE THIS|SAVE INFO)$/.test(clean))return saveLatestSlide();
 if(S.ctx==='mod' && (S.slide==='mod-menu' || !S.slide) && /^(?:[1-9]|10)$/.test(T.trim())){T='GUIDE '+T.trim()}
 const draft=S.ctx==='visit-time'||S.ctx==='visit-review';
-const clean=T.replace(/[’']/g,'').replace(/[^A-Z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
 const resume=S.slide && S.slide!=='mod-menu' && /^(?:RESUME(?: (?:MY |THE )?(?:GUIDE|STEPS))?|BACK TO (?:THE )?(?:GUIDE|STEPS)|CONTINUE(?: THE GUIDE)?)$/.test(clean);
 if(resume){
  S.ctx='mod';

@@ -68,6 +68,16 @@ h1{font-size:20px;margin:0 0 4px}p{margin:0 0 8px}.mut{color:var(--mut);font-siz
 .mc h2{font-size:18px;margin:0;color:#1c1c28}.mc .mut2{color:#505068;font-size:13px}.mc label{font-size:13px;color:#505068}
 .ln{height:10px;background:#d9d9e3;border-radius:4px}
 .wrap{max-width:850px;grid-template-columns:minmax(300px,430px) minmax(240px,320px);justify-content:center;padding:28px 16px}.pw{grid-column:1;grid-row:1}.panel{grid-column:2;grid-row:1}.panel h1{font-size:26px;letter-spacing:-.035em}.panel details{background:white;color:#242735;border:1px solid #d4d6df;border-radius:0;margin-top:14px}.panel summary{cursor:pointer;padding:16px;font-weight:650}.panel .pill{float:right}.panel form,.tools{padding:0 16px 16px}.panel fieldset{border:0;border-top:1px solid #e1e3e9;padding:10px 0;margin:6px 0}.panel legend{font-weight:650;padding:0 6px 0 0}.panel label{display:block;padding:5px 0}.panel select{font:inherit;width:100%;padding:8px}.tools{display:grid;gap:6px}#settings{background:#eef0f3;border-color:#c8cdd5;color:#2c303a}#settings fieldset{border-top-color:#d4d8df}#settings .mb{background:#4b5563;border-color:#4b5563}#settings .mb.s{background:#fff;color:#4b5563}#settings .pill.on{background:#d7dce2;color:#1f2937}.set-title{display:inline-flex;align-items:center;gap:6px;vertical-align:middle}.opt-q{font-weight:600;color:#1f2937;margin:10px 0 6px;font-size:14px}.disc{font-size:12.5px;line-height:1.38;color:#4b5563;background:#e2e5ea;border-radius:8px;padding:8px 10px;margin:0 0 12px}.dev{max-width:100%}.typing{align-self:flex-start;margin-top:6px;background:#e9e9eb;color:#515563;border-radius:20px;padding:8px 15px;letter-spacing:3px;animation:pulse 1s ease-in-out infinite alternate}@keyframes pulse{to{opacity:.5}}@keyframes dev-flash{0%{box-shadow:0 0 0 2px #3a3a3f inset,0 12px 32px rgba(0,0,0,.4)}25%{box-shadow:0 0 0 2px #34c759 inset,0 0 0 4px rgba(52,199,89,.28),0 12px 32px rgba(0,0,0,.4)}100%{box-shadow:0 0 0 2px #3a3a3f inset,0 12px 32px rgba(0,0,0,.4)}}.dev.ping{animation:dev-flash .55s ease-out}@media(prefers-reduced-motion:reduce){.typing,.dev.ping{animation:none}}@media(max-width:690px){.wrap{display:flex;flex-direction:column;align-items:center;padding:10px;gap:10px}.panel,.pw{width:min(100%,390px)}.pw{position:static}.dev{height:76dvh;min-height:470px}.panel details{margin-top:6px}.panel h1{font-size:20px}}
+.pic-row{display:flex;align-items:center;gap:6px;align-self:flex-start;max-width:86%;margin-top:3px}.pic-row .pic{flex:1;min-width:0;max-width:none;margin-top:0}
+.ios-dl{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;flex:none;color:#007aff;text-decoration:none;border-radius:50%}
+.ios-dl span{width:32px;height:32px;border-radius:50%;background:#e9e9eb;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.ios-dl:hover span,.ios-dl:focus-visible span{background:#dcdce0}
+.save-action{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 10px;background:transparent;color:#145592;border:0;border-radius:8px;font:600 14px system-ui;cursor:pointer;text-decoration:none}
+.saved-img-row{display:flex;align-items:center;gap:8px;margin:8px 0}.saved-img-row img{flex:1;min-width:0}
+#saved-items{box-sizing:border-box;width:min(390px,94vw);max-height:80vh;border:1px solid #aaa;border-radius:16px;background:var(--card);color:var(--fg);padding:18px}
+#saved-items::backdrop{background:#0006}
+#saved-items article{border-top:1px solid #aaa;padding:12px 0;white-space:pre-line;overflow-wrap:anywhere}
+#saved-items img{display:block;max-width:100%;height:auto;border-radius:12px}
 </style>
 </head>
 <body>
@@ -98,6 +108,11 @@ h1{font-size:20px;margin:0 0 4px}p{margin:0 0 8px}.mut{color:var(--mut);font-siz
 </div></div>
 </div>
 </div>
+<dialog id="saved-items" aria-labelledby="saved-title">
+<h2 id="saved-title">Saved info and pictures</h2>
+<form method="dialog"><button class="btn">Back to conversation</button></form>
+<div id="saved-list"></div>
+</dialog>
 <script src="guides.js"></script>
 <script src="guide-engine.js"></script>
 <script src="app.js"></script>

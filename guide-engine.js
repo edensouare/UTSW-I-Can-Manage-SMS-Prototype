@@ -178,18 +178,18 @@ function formatCardText(slide,card,part){
 }
 function trachStart(){
   const cannula='sms-images/cannula.jpg';
-  return {text:'Let’s walk through cleaning your trach tube. Do you have a reusable inner cannula, like the one pictured? Reply YES, NO, or NOT SURE.',image:cannula,caption:'Reusable inner cannula',id:'trach-check',q:choices('Yes','No','Not sure')};
+  return {text:'Let’s walk through cleaning your trach tube. Do you have a reusable inner cannula, like the one pictured? Reply YES, NO, or NOT SURE, or reply SAVE to save information to your ICM assistant.',image:cannula,caption:'Reusable inner cannula',id:'trach-check',q:choices('Yes','No','Not sure','Save')};
 }
 function supplies(){
   const supImg='media (from initial demo)/trach-sup.jpg';
-  return {text:'First, gather these supplies:\n• Clean washcloth\n• Distilled or sterile water\n• Cotton-tipped swabs\n• Cleaning brush\n• Tap water\n• Two clean bowls or cups\n\nReply READY when you have everything.',image:supImg,caption:'Cleaning supplies',id:'trach-ready',q:choices('Ready')};
+  return {text:'First, gather these supplies:\n• Clean washcloth\n• Distilled or sterile water\n• Cotton-tipped swabs\n• Cleaning brush\n• Tap water\n• Two clean bowls or cups\n\nReply READY when you have everything, or reply SAVE to save information to your ICM assistant.',image:supImg,caption:'Cleaning supplies',id:'trach-ready',q:choices('Ready','Save')};
 }
 function present(slide,part=0,customText=null){
   const card=cards[slide.id];
   const next=card.chunks[part+1] || content.some(s=>s.url===slide.url && s.page>slide.page);
-  const prompt=next?'Reply NEXT to continue.':'Was this helpful? Reply YES or ask another question.';
+  const prompt=next?'Reply NEXT to continue, or reply SAVE to save information to your ICM assistant.':'Was this helpful? Reply YES, reply SAVE to save information to your ICM assistant, or ask another question.';
   const body=customText||formatCardText(slide,card,part);
-  return {text:body+'\n\n'+prompt,image:part===0?cardPhoto(slide,card):null,caption:cleanHeading(card.heading),id:slide.id+':'+part,q:choices(next?'Next':'Yes')};
+  return {text:body+'\n\n'+prompt,image:part===0?cardPhoto(slide,card):null,caption:cleanHeading(card.heading),id:slide.id+':'+part,q:choices(next?'Next':'Yes','Save')};
 }
 function topics(module){
   const decks=[...groups.values()].filter(rows=>rows[0].module===module && rows.some(isSubstantive));
@@ -298,8 +298,8 @@ async function answer(question, previous){
   if(conversational){
     const lastPart=card.chunks.length-1;
     const hasNext=content.some(s=>s.url===slide.url && s.page>slide.page);
-    const prompt=hasNext?'Reply NEXT to continue.':'Was this helpful? Reply YES or ask another question.';
-    return {text:conversational+'\n\n'+prompt,image:cardPhoto(slide,card),caption:cleanHeading(card.heading),id:slide.id+':'+lastPart,q:choices(hasNext?'Next':'Yes')};
+    const prompt=hasNext?'Reply NEXT to continue, or reply SAVE to save information to your ICM assistant.':'Was this helpful? Reply YES, reply SAVE to save information to your ICM assistant, or ask another question.';
+    return {text:conversational+'\n\n'+prompt,image:cardPhoto(slide,card),caption:cleanHeading(card.heading),id:slide.id+':'+lastPart,q:choices(hasNext?'Next':'Yes','Save')};
   }
   return present(slide);
 }
