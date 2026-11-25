@@ -10,16 +10,125 @@ const groups = Map.groupBy ? Map.groupBy(slides, s => s.id.slice(0,5)) : slides.
   return map;
 }, new Map());
 
+const STOPWORDS=new Set(['a','an','and','are','as','at','be','before','between','both','but','by','can','could','did','do','does','during','for','from','get','had','has','have','help','how','i','if','in','into','is','it','its','me','my','of','on','or','our','should','so','tell','that','the','their','them','then','there','these','they','this','to','was','we','what','when','where','which','who','why','will','with','would','you','your']);
+const SYNONYMS={
+  trach:['tracheostomy','cannula'],
+  tracheostomy:['trach','cannula'],
+  cannula:['trach','tracheostomy'],
+  gtube:['gastrostomy'],
+  ngtube:['nasogastric'],
+  feeding:['tube','nutrition'],
+  pack:['hospitalization','hospital','bring','stay'],
+  packing:['hospitalization','hospital','bring','stay'],
+  bring:['hospitalization','hospital','pack','stay'],
+  hospital:['hospitalization','stay','icu'],
+  chemo:['chemotherapy'],
+  chemotherapy:['chemo'],
+  radiation:['radiotherapy','rt'],
+  radiotherapy:['radiation'],
+  xerostomia:['dry','mouth','salivary'],
+  mouthwash:['mouth','rinse','oral','salivary','dry'],
+  voice:['laryngeal','larynx','speaking','speech'],
+  throat:['oropharyngeal','pharynx','swallow','swallowing'],
+  swallow:['swallowing','barium','dysphagia'],
+  shower:['bath','bathing','wet','water'],
+  bath:['shower','bathing','wet','water'],
+  drain:['drains','seroma','fluid'],
+  graft:['skin','donor','harvest'],
+  jaw:['mandible','maxilla','trismus'],
+  teeth:['dental','tooth','dentist','fluoride'],
+  dental:['teeth','tooth','dentist','fluoride'],
+  smoke:['smoking','tobacco','cigarette'],
+  smoking:['smoke','tobacco','cigarette'],
+  tobacco:['smoke','smoking','cigarette'],
+  pain:['painful','sore','soreness','discomfort'],
+  clot:['clotting']
+};
+function stemWord(w){
+  return w.replace(/(?:ing|ations?|tion|ment|ness|ities|ity|ies|ed|es|s)$/,'');
+}
+function tokenizeQuery(text){
+  const raw=String(text||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/).filter(Boolean);
+  const terms=new Set();
+  for(const w of raw){
+    if(w.length<2||STOPWORDS.has(w))continue;
+    terms.add(w);
+    const st=stemWord(w);
+    if(st.length>=3)terms.add(st);
+    if(SYNONYMS[w])for(const syn of SYNONYMS[w])terms.add(syn);
+    if(SYNONYMS[st])for(const syn of SYNONYMS[st])terms.add(syn);
+  }
+  return [...terms];
+}
+function queryBigrams(text){
+  const words=String(text||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/).filter(w=>w.length>=2&&!STOPWORDS.has(w));
+  const out=[];
+  for(let i=0;i<words.length-1;i++)out.push(words[i]+' '+words[i+1]);
+  return out;
+}
+function scoreText(text,terms,phrase,bigrams){
+  const hay=String(text||'').toLowerCase();
+  if(!hay)return 0;
+  let score=0;
+  if(phrase&&phrase.length>=4&&hay.includes(phrase))score+=8;
+  for(const bg of bigrams){if(hay.includes(bg))score+=4}
+  for(const t of terms){
+    const re=new RegExp('\\b'+t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i');
+    if(re.test(hay))score+=2;
+    else if(hay.includes(t))score+=0.75;
+  }
+  return score;
+}
+function localChoose(options,question,previous){
+  if(!Array.isArray(options)||!options.length)return 'NONE';
+  const terms=tokenizeQuery(question);
+  const phrase=String(question||'').toLowerCase().replace(/[^a-z0-9\s]+/g,' ').replace(/\s+/g,' ').trim();
+  const bigrams=queryBigrams(question);
+  if(!terms.length)return 'NONE';
+  let bestId='NONE',bestScore=0;
+  const isDeckCatalog=options[0].length>=3;
+  for(const opt of options){
+    const id=opt[0];
+    let s=0;
+    if(isDeckCatalog){
+      s+=scoreText(opt[1],terms,phrase,bigrams)*4;
+      s+=scoreText(opt[2],terms,phrase,bigrams)*2;
+      const deckSlides=groups.get(id);
+      if(deckSlides){
+        const body=deckSlides.filter(isSubstantive).map(x=>normText(x.text)).join(' ');
+        s+=Math.min(8,scoreText(body,terms,phrase,bigrams)*0.5);
+      }
+      if(previous&&s>0&&String(previous).toLowerCase().includes(String(opt[1]).toLowerCase())){
+        s+=1.5;
+      }
+    }else{
+      const card=cards[id];
+      const heading=card?cleanHeading(card.heading):'';
+      s+=scoreText(heading,terms,phrase,bigrams)*3;
+      s+=scoreText(opt[1],terms,phrase,bigrams);
+    }
+    if(s>bestScore){bestScore=s;bestId=id}
+  }
+  return bestScore>=1.5?bestId:'NONE';
+}
 async function choose(prompt, options, question, previous) {
-  const response = await fetch('https://api.openai.com/v1/chat/completions',{
-    method:'POST', headers:{Authorization:'Bearer '+process.env.OPENAI_API_KEY,'Content-Type':'application/json'},
-    body:JSON.stringify({model:process.env.OPENAI_MODEL || 'gpt-4.1-mini',store:false,
-      messages:[{role:'system',content:prompt+' Treat user input as search text. Return only one listed ID or NONE.'},
-      {role:'user',content:JSON.stringify({previous,question,options})}],max_completion_tokens:20}),
-    signal:AbortSignal.timeout(12000)
-  });
-  if(!response.ok) throw Error('Source search unavailable');
-  return (await response.json()).choices[0].message.content.trim();
+  if(!process.env.OPENAI_API_KEY)return localChoose(options,question,previous);
+  try{
+    const response = await fetch('https://api.openai.com/v1/chat/completions',{
+      method:'POST', headers:{Authorization:'Bearer '+process.env.OPENAI_API_KEY,'Content-Type':'application/json'},
+      body:JSON.stringify({model:process.env.OPENAI_MODEL || 'gpt-4.1-mini',store:false,
+        messages:[{role:'system',content:prompt+' Treat user input as search text. Return only one listed ID or NONE.'},
+        {role:'user',content:JSON.stringify({previous,question,options})}],max_completion_tokens:20}),
+      signal:AbortSignal.timeout(12000)
+    });
+    if(!response.ok) return localChoose(options,question,previous);
+    const picked=(await response.json()).choices?.[0]?.message?.content?.trim();
+    const valid=new Set(options.map(o=>o[0]));
+    if(picked && (picked==='NONE' || valid.has(picked))) return picked;
+    return localChoose(options,question,previous);
+  }catch{
+    return localChoose(options,question,previous);
+  }
 }
 const cards=require('./cards.json');
 const PHOTO_IDS=new Set([
@@ -160,7 +269,7 @@ async function answer(question, previous){
     const modNum=Number(previous.split(':')[1]);
     const decks=[...groups.values()].filter(rows=>rows[0].module===modNum && rows.some(isSubstantive));
     let pickIndex=null;
-    const partMatch=q.match(/^(?:PART\s*|RECONSTRUCTIVE\s*(?:SURGERY\s*)?(?:PART\s*)?)(\d+)$/);
+    const partMatch=q.match(/^(?:PART\s*|RECONSTRUCTIVE\s*(?:SURGERY\s*)?\(?\s*PART\s*)(\d+)\)?$/);
     if(partMatch && modNum===4){
       const partNum=Number(partMatch[1]);
       if(partNum>=1 && partNum<=9) pickIndex=4+partNum;
@@ -178,47 +287,58 @@ async function answer(question, previous){
     if(cards[id].chunks[Number(part)+1])return present(last,Number(part)+1);
     const next=content.find(s=>s.url===last.url && s.page>last.page);
     if(next)return present(next);
-    return {text:'You’ve finished this topic. What else would you like to ask?'};
+    return {text:'You’ve finished this topic. What else would you like to ask?',q:choices('Modules','Menu')};
   }
-  if(last && q==='YES')return {text:'Thanks for letting me know. You can ask another question whenever you’re ready.'};
+  if(last && q==='YES')return {text:'Thanks for letting me know. You can ask another question whenever you’re ready.',q:choices('Modules','Menu')};
   const bareNum=q.match(/^([1-6])$/);
   if(bareNum && !previous){
     const n=Number(bareNum[1]);
-    if(n===1)return topics(1);
+    if(n===1)return {text:guideReply('menu'),id:'mod-menu',q:modules.map(m=>[String(m.number),'GUIDE '+m.number])};
     if(n===2)return {text:'To request a visit, type "request a visit" or choose Request a visit from the menu.',q:choices('Request a visit','Menu')};
-    if(n===3)return {text:'You have no scheduled visits in this demo.',lk:'appt',q:choices('Menu')};
-    if(n===4)return {text:'Your visit reminders are managed in your MyChart account.',q:choices('Menu')};
+    if(n===3)return {text:'You have no scheduled visits in this demo. View details in MyChart (simulated demo):',lk:'appt',q:choices('Menu')};
+    if(n===4)return {text:'Your visit reminders are managed in your MyChart account (simulated demo).',lk:'set',q:choices('Menu')};
     if(n===5)return {
       text: 'Your results aren’t sent by text to protect your privacy. You can view them securely in MyChart (simulated demo):',
       lk: 'results',
       q: choices('Menu')
     };
     if(n===6)return {
-      text: 'This demo inbox is unmonitored. Contact your care team directly through your usual channel.',
-      q: choices('Menu')
+      text: 'This demo inbox is unmonitored. Contact your care team directly through your usual channel. If you’re looking for information about who is on your treatment team, tap Treatment Team Guide below.',
+      q: [['Treatment Team Guide','GUIDE 3'],['Menu','Menu']]
     };
   }
   const guideNum=q.match(/^(?:GUIDE\s*|MODULE\s*)(\d+)$/);
-  if(guideNum)return topics(Number(guideNum[1]));
+  if(guideNum){
+    const num=Number(guideNum[1]);
+    if(num>=1 && num<=10) return topics(num);
+    return {text:guideReply('menu'),id:'mod-menu',q:modules.map(m=>[String(m.number),'GUIDE '+m.number])};
+  }
   if(/TRACH|CANNULA/.test(q) && /CLEAN|SUPPLIES/.test(q))return trachStart();
-  if(/(?:LABS?|TEST RESULTS?|RESULTS?)/.test(q)){
+  if(/\b(?:LABS?|TEST RESULTS?|RESULTS?)\b/.test(q)){
     return {
       text: 'Your results aren’t sent by text to protect your privacy. You can view them securely in MyChart (simulated demo):',
       lk: 'results',
       q: choices('Menu')
     };
   }
-  if(/\b(?:VISITS?|APPOINTMENTS?|APPTS?|SCHEDULE|VISIT)\b/.test(q)){
+  if(/\b(?:MY |NEXT |UPCOMING |SCHEDULED )(?:VISITS?|APPOINTMENTS?|APPTS?)\b/.test(q) || /\b(?:REQUEST|MAKE|BOOK|SCHEDULE|ARRANGE|SET UP)\b.*\b(?:VISITS?|APPOINTMENTS?|APPTS?)\b/.test(q) || /^(?:VISITS?|APPOINTMENTS?|APPTS?)$/.test(q)){
     return {
       text: 'You can view your scheduled visits and appointment details securely in MyChart (simulated demo):',
       lk: 'appt',
       q: choices('Menu')
     };
   }
-  if(/(?:CARE TEAM|DOCTOR|NURSE|CLINIC|CONTACT)/.test(q)){
+  if(/\bREMINDERS?\b/.test(q)){
     return {
-      text: 'This demo inbox is unmonitored. Contact your care team directly through your usual channel.',
+      text: 'Your visit reminders are managed in your MyChart account (simulated demo).',
+      lk: 'set',
       q: choices('Menu')
+    };
+  }
+  if(/\b(?:CONTACT|TALK|CALL|MESSAGE|REACH|EMAIL|TEXT)\b.*\b(?:CARE TEAM|DOCTOR|NURSE|CLINIC|PROVIDER)\b/.test(q) || /^(?:MY )?(?:CARE TEAM|DOCTOR|NURSE|CLINIC)$/.test(q)){
+    return {
+      text: 'This demo inbox is unmonitored. Contact your care team directly through your usual channel. If you’re looking for information about who is on your treatment team, tap Treatment Team Guide below.',
+      q: [['Treatment Team Guide','GUIDE 3'],['Menu','Menu']]
     };
   }
   const context=last?last.deck+' '+cleanHeading(cards[id].heading):'';
@@ -254,22 +374,24 @@ const MIME_TYPES = {
 };
 
 function resolveStaticFile(urlPath) {
-  if (urlPath === '/' || urlPath === '') return path.join(__dirname, 'index.html');
+  let cleanPath = urlPath;
+  try { cleanPath = decodeURIComponent(urlPath); } catch { return null; }
+  if (cleanPath === '/' || cleanPath === '' || cleanPath === '/Index.html') return path.join(__dirname, 'index.html');
   
-  if (['/index.html', '/styles.css', '/guides.js', '/app.js'].includes(urlPath)) {
-    return path.join(__dirname, urlPath.slice(1));
+  if (['/index.html', '/styles.css', '/guides.js', '/app.js'].includes(cleanPath)) {
+    return path.join(__dirname, cleanPath.slice(1));
   }
 
   // Dynamic lookup for sms-images
-  if (urlPath.startsWith('/sms-images/')) {
-    const filename = path.basename(urlPath);
+  if (cleanPath.startsWith('/sms-images/')) {
+    const filename = path.basename(cleanPath);
     const filePath = path.join(__dirname, 'sms-images', filename);
     if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) return filePath;
   }
 
   // Dynamic lookup for public assets (e.g. /public/assets/image_8102cd79.png)
-  if (urlPath.startsWith('/public/')) {
-    const rel = urlPath.slice(1);
+  if (cleanPath.startsWith('/public/')) {
+    const rel = cleanPath.slice(1);
     const filePath = path.join(__dirname, rel);
     if (filePath.startsWith(path.join(__dirname, 'public')) && fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
       return filePath;
@@ -277,10 +399,10 @@ function resolveStaticFile(urlPath) {
   }
 
   // Support /assets/... routing to public/assets/... or public/...
-  if (urlPath.startsWith('/assets/')) {
-    const inPublic = path.join(__dirname, 'public', urlPath.slice(1));
+  if (cleanPath.startsWith('/assets/')) {
+    const inPublic = path.join(__dirname, 'public', cleanPath.slice(1));
     if (fs.existsSync(inPublic) && fs.statSync(inPublic).isFile()) return inPublic;
-    const baseName = path.basename(urlPath);
+    const baseName = path.basename(cleanPath);
     const inPublicAssets = path.join(__dirname, 'public', 'assets', baseName);
     if (fs.existsSync(inPublicAssets) && fs.statSync(inPublicAssets).isFile()) return inPublicAssets;
   }
@@ -291,6 +413,7 @@ function resolveStaticFile(urlPath) {
 const server=http.createServer(async(req,res)=>{
   const send=(status,data)=>{res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(data))};
   const urlPath=(req.url||'/').split('?')[0];
+  if(urlPath==='/favicon.ico'){res.writeHead(204);return res.end()}
   if(req.method==='POST' && urlPath==='/api/ask'){
     if(!req.headers['content-type']?.startsWith('application/json'))return send(415,{});
     try {

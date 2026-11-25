@@ -16,10 +16,10 @@ const th=$('#th');th.innerHTML='';
 if(!S.msgs.length)th.innerHTML='<div class="off">UTSW ICM is off.<br>Turn it on in MyChart settings to start.</div>';
 else{const t=document.createElement('div');t.className='ts';t.textContent='Text Message\nToday '+(S.startedAt||S.msgs[0].ts||stamp());th.append(t)}
 S.msgs.forEach(m=>{const d=document.createElement('div');d.className='m'+(m.a?'':' me');for(const part of m.t.split(/(https:\/\/[^\s]+)/g)){if(m.a && part.startsWith('https://')){const link=document.createElement('a');link.href=part;link.textContent='Open source material';link.target='_blank';link.rel='noopener';d.append(link)}else d.append(document.createTextNode(part))}
-if(m.lk){const b=document.createElement('button');b.className='lk';b.textContent=LK[m.lk];b.onclick=()=>openMC(m.lk);d.append(b)}
+if(m.lk||m.slide?.lk){const lk=m.lk||m.slide.lk;if(LK[lk]){const b=document.createElement('button');b.className='lk';b.textContent=LK[lk];b.onclick=()=>openMC(lk);d.append(b)}}
 th.append(d);
 if(m.ts){const tm=mk('div','mt'+(m.a?'':' me'),m.ts);th.append(tm)}
-if(m.slide?.image){const frame=mk('a','pic');frame.href=m.slide.image;frame.target='_blank';frame.rel='noopener';const img=mk('img');img.src=m.slide.photo||m.slide.image;img.alt=m.slide.caption;frame.append(img,mk('span','',m.slide.caption));th.append(frame)}
+if(m.slide?.image){const frame=mk('a','pic');frame.href=m.slide.image;frame.target='_blank';frame.rel='noopener';const img=mk('img');img.src=m.slide.photo||m.slide.image;img.alt=m.slide.caption||'';img.onerror=()=>frame.remove();frame.append(img,mk('span','',m.slide.caption||''));th.append(frame)}
 });
 const last=S.msgs[S.msgs.length-1];
 if(last&&!last.a){const dl=document.createElement('div');dl.className='dl';dl.textContent='Delivered';th.append(dl)}
@@ -71,7 +71,7 @@ function opener(returning){
   'Good morning from UTSW ICM. I’m here to help you take things one step at a time. Here’s how I can help today:',
   'Good morning from UTSW ICM. Whenever you feel ready, I’m here to help make today a little easier. What would be helpful right now?'
  ]:h>=12&&h<17?[
-  'Good afternoon from UTSW ISM. Here’s what I can help with:',
+  'Good afternoon from UTSW ICM. Here’s what I can help with:',
   'Good afternoon from UTSW ICM. Take your time, I’m right here if you need information or support today. Where would you like to start?'
  ]:h>=17&&h<22?[
   'Good evening, it’s okay to take things one question at a time. Here’s how I can support you:',
@@ -99,10 +99,10 @@ function menu(){
 function visitRequest(){
  S.ctx='visit-time';say('What time of day works best for your visit? Reply Morning, Afternoon, No preference, or Cancel.');S.q=[['Morning','Morning'],['Afternoon','Afternoon'],['No preference','No preference'],['Cancel','Cancel']];
 }
-function results(){S.ctx=null;say('Your results aren’t sent by text to protect your privacy. You can view them securely in MyChart:',{lk:'results'});S.q=MENUQ}
-function appt(){S.ctx=null;say(S.request?'Your appointment request is pending. Preferred time: '+S.request+'. A visit time has yet to be officially booked.':'You have no scheduled visits in this demo.');S.q=withResume(S.request?MENUQ:[['Request a visit','REQUEST VISIT'],...MENUQ])}
-function rem(){S.ctx=null;say('Your visit reminders are '+reminders()+'.');S.q=MENUQ}
-function care(){S.ctx=null;say('This demo inbox is unmonitored. Contact your care team directly through your usual channel.');S.q=MENUQ}
+function results(){S.ctx=null;say('Your results aren’t sent by text to protect your privacy. You can view them securely in MyChart (simulated demo):',{lk:'results'});S.q=withResume(MENUQ)}
+function appt(){S.ctx=null;say(S.request?'Your appointment request is pending. Preferred time: '+S.request+'. A visit time has yet to be officially booked. View details in MyChart (simulated demo):':'You have no scheduled visits in this demo. View details in MyChart (simulated demo):',{lk:'appt'});S.q=withResume(S.request?MENUQ:[['Request a visit','REQUEST VISIT'],...MENUQ])}
+function rem(){S.ctx=null;say('Your visit reminders are '+reminders()+' (simulated demo).',{lk:'set'});S.q=withResume(MENUQ)}
+function care(){S.ctx=null;say('This demo inbox is unmonitored. Contact your care team directly through your usual channel. If you’re looking for information about who is on your treatment team, tap Treatment Team Guide below.');S.q=withResume([['Treatment Team Guide','GUIDE 3'],...MENUQ])}
 function mods(){S.ctx='mod';S.slide='mod-menu';say(guideReply('menu'));S.q=modules.map(m=>[String(m.number),'GUIDE '+m.number])}
 async function respond(T){
 if(T==='STOP'){say('Texts are off.');S.on=false;S.q=[];$('#settings').open=true;sync();return}
@@ -134,7 +134,7 @@ if(draft && !resume){
  if(S.ctx==='visit-review'){
   if(/^(?:CHANGE(?: THE)? TIME|EDIT|PICK ANOTHER TIME)$/.test(polite))return visitRequest();
   if(/^(?:YES|YEAH|YEP|SURE|OK|OKAY|GO AHEAD|CONFIRM|SEND(?: IT| REQUEST| THE REQUEST)?|YES SEND(?: IT)?)$/.test(polite)){
-   S.request=S.time;S.ctx=null;say('Request saved in this demo. Status: pending. Preferred time: '+S.request+'.');S.q=withResume([['My visits','NEXT VISIT'],...MENUQ]);return
+   S.request=S.time;S.ctx=null;say('Request saved in this demo. Status: pending. Preferred time: '+S.request+'. View in MyChart (simulated demo):',{lk:'appt'});S.q=withResume([['My visits','NEXT VISIT'],...MENUQ]);return
   }
   say('Should I send the request? Reply yes, change the time, or cancel.');S.q=[['Send request','SEND REQUEST'],['Change time','CHANGE TIME'],['Cancel','CANCEL']];return
  }
@@ -147,24 +147,27 @@ if(/^(CARE|CARE TEAM)$/.test(T))return care();
 if(/^(LAB RESULTS?|TEST RESULTS?|RESULTS)$/.test(T))return results();
 const c=S.ctx;
 if(c==='rem'){
-if(T==='C'){S.ctx=null;say('Thanks, you’re confirmed. See you then.');S.q=MENUQ;return}
-if(T==='R')return S.request?appt():visitRequest();}
+if(/^(?:C|CONFIRM)$/.test(T)){S.ctx=null;say('Thanks, you’re confirmed. See you then.');S.q=MENUQ;return}
+if(/^(?:R|RESCHEDULE)$/.test(T))return S.request?appt():visitRequest();}
 if(c!=='mod'){
 if(T==='1')return mods();
-if(T==='2'||/^(APPOINTMENT|NEXT VISIT)$/.test(T))return appt();
-if(T==='3'||/^REMINDERS?$/.test(T))return rem();
-if(T==='4')return results();
-if(T==='5')return care();
+if(T==='2')return S.request?appt():visitRequest();
+if(T==='3'||/^(APPOINTMENT|NEXT VISIT|MY VISITS)$/.test(T))return appt();
+if(T==='4'||/^REMINDERS?$/.test(T))return rem();
+if(T==='5')return results();
+if(T==='6')return care();
 }
-S.ctx='mod';
 const session=S;
 try{
  const response=await fetch('/api/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:T,previous:S.slide})});
  if(!response.ok)throw Error();
  const reply=await response.json();
  if(S!==session||!S.on)return;
- say(reply.text,{slide:reply});S.slide=reply.id;S.q=reply.q||[];
-}catch{if(S===session&&S.on){say('The guide is unavailable. Please try again.');S.ping=false;S.q=MENUQ}}
+ say(reply.text,{slide:reply,lk:reply.lk});
+ if(reply.id){S.ctx='mod';S.slide=reply.id;}
+ else{S.ctx=null;if(reply.text?.includes('finished this topic'))S.slide=null;}
+ S.q=reply.q||withResume(MENUQ);
+}catch{if(S===session&&S.on){S.ctx=null;say('The guide is unavailable. Please try again.');S.ping=false;S.q=MENUQ}}
 
 }
 $('#on').onclick=()=>{unlockAudio();S={on:true,ctx:null,msgs:[],q:[],request:S.request};$('#settings').open=false;menu();sync();render();$('#ti').focus()};
