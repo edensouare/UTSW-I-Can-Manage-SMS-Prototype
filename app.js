@@ -1,0 +1,180 @@
+const $=s=>document.querySelector(s);
+const MENU='I can help with:\n1 = ICM Learning Modules\n2 = My next visit\n3 = Reminders\n4 = Test results\n5 = Talk to my care team';
+const MQ=[['1 I Can Manage','1'],['2 My next visit','2'],['3 Reminders','3'],['4 Test results','4'],['5 Care team','5']];
+const MENUQ=[['MENU','MENU']];
+let S,audioCtx;
+function stamp(){return new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}
+function syncClock(){const c=$('#clock');if(c)c.textContent=stamp().replace(/\s*[AP]M$/i,'')}
+function unlockAudio(){try{const Ctx=window.AudioContext||window.webkitAudioContext;if(!Ctx)return null;audioCtx=audioCtx||new Ctx();if(audioCtx.state==='suspended')audioCtx.resume().catch(()=>{});return audioCtx}catch{return null}}
+function pingSound(){try{const ctx=unlockAudio();if(!ctx)return;const play=()=>{const t=ctx.currentTime;[[659.25,0,0.028,0.16],[987.77,0.055,0.022,0.22]].forEach(([freq,offset,peak,dur])=>{const osc=ctx.createOscillator(),gain=ctx.createGain();osc.type='sine';osc.frequency.setValueAtTime(freq,t+offset);gain.gain.setValueAtTime(0.0001,t+offset);gain.gain.exponentialRampToValueAtTime(peak,t+offset+0.015);gain.gain.exponentialRampToValueAtTime(0.0001,t+offset+dur);osc.connect(gain);gain.connect(ctx.destination);osc.start(t+offset);osc.stop(t+offset+dur+0.01)})};if(ctx.state==='suspended')ctx.resume().then(play).catch(()=>{});else play()}catch{}}
+function reset(){S={on:false,ctx:null,msgs:[],q:[],mc:null,signed:false};$('#prefs').reset();$('#settings').open=true;$('.scr').classList.remove('large');$('.dev')?.classList.remove('ping');sync();render()}
+function say(t,o){if(!S.startedAt)S.startedAt=stamp();S.msgs.push(Object.assign({a:1,t,ts:stamp()},o||{}));S.ping=true}
+function sync(){$('#on').disabled=S.on;$('#off').classList.toggle('hide',!S.on);$('#on').classList.toggle('hide',S.on);$('#sRem').disabled=$('#sRes').disabled=!S.on||S.busy;const st=$('#stat');if(st){st.textContent=S.on?'On':'Off';st.classList.toggle('on',S.on)}}
+function reminders(){const r=[...document.querySelectorAll('.rem')].filter(c=>c.checked).map(c=>c.value);return r.length?r.join(', '):'managed in your MyChart account'}
+function render(){
+const th=$('#th');th.innerHTML='';
+if(!S.msgs.length)th.innerHTML='<div class="off">UTSW ICM is off.<br>Turn it on in MyChart settings to start.</div>';
+else{const t=document.createElement('div');t.className='ts';t.textContent='Text Message\nToday '+(S.startedAt||S.msgs[0].ts||stamp());th.append(t)}
+S.msgs.forEach(m=>{const d=document.createElement('div');d.className='m'+(m.a?'':' me');for(const part of m.t.split(/(https:\/\/[^\s]+)/g)){if(m.a && part.startsWith('https://')){const link=document.createElement('a');link.href=part;link.textContent='Open source material';link.target='_blank';link.rel='noopener';d.append(link)}else d.append(document.createTextNode(part))}
+if(m.lk){const b=document.createElement('button');b.className='lk';b.textContent=LK[m.lk];b.onclick=()=>openMC(m.lk);d.append(b)}
+th.append(d);
+if(m.ts){const tm=mk('div','mt'+(m.a?'':' me'),m.ts);th.append(tm)}
+if(m.slide?.image){const frame=mk('a','pic');frame.href=m.slide.image;frame.target='_blank';frame.rel='noopener';const img=mk('img');img.src=m.slide.photo||m.slide.image;img.alt=m.slide.caption;frame.append(img,mk('span','',m.slide.caption));th.append(frame)}
+});
+const last=S.msgs[S.msgs.length-1];
+if(last&&!last.a){const dl=document.createElement('div');dl.className='dl';dl.textContent='Delivered';th.append(dl)}
+if(S.busy){const dots=mk('div','typing','•••');dots.setAttribute('role','status');dots.setAttribute('aria-label','UTSW ICM is typing');th.append(dots)}
+th.scrollTop=th.scrollHeight;
+const q=$('#qr');q.innerHTML='';
+if(S.on&&!S.busy)S.q.forEach(([l,v])=>{const b=document.createElement('button');b.textContent=l;b.onclick=()=>{unlockAudio();go(v)};q.append(b)});
+q.classList.toggle('hide',!S.on||!S.q.length);
+$('.snd').disabled=!S.on||S.busy;$('#ti').disabled=!S.on;
+$('#tp').classList.toggle('hide',!!S.mc);$('#mp').classList.toggle('hide',!S.mc);
+if(S.mc)renderMC();
+if(S.ping){S.ping=false;pingSound();const dev=$('.dev');if(dev){dev.classList.remove('ping');void dev.offsetWidth;dev.classList.add('ping')}}
+}
+const LK={results:'mychart.utsw.example/r/8Kq2',appt:'mychart.utsw.example/v/3Fm9',set:'mychart.utsw.example/s/7Hp1',learn:'mychart.utsw.example/g/2Vn6'};
+const MCT={learn:['Learn › I Can Manage','[Guide title, videos, and steps]'],results:['Test results','[Your test results appear here]'],appt:['Visits','[Next visit: date, time, location, directions]'],set:['Settings › Text messaging','[Reminder and text preferences]']};
+function openMC(k){S.mc=k;S.signed=false;render()}
+function mk(tag,cls,text){const e=document.createElement(tag);if(cls)e.className=cls;if(text)e.textContent=text;return e}
+function renderMC(){
+const el=$('#mc');el.innerHTML='';
+el.append(mk('div','mlogo','MyChart'));
+const t=MCT[S.mc];
+if(!S.signed){
+el.append(mk('h2','','Sign in'),mk('p','mut2','For your privacy, please sign in to see '+t[0].toLowerCase()+'.'));
+const l1=mk('label','','Username'),i1=mk('input','mi');i1.placeholder='Username';
+const l2=mk('label','','Password'),i2=mk('input','mi');i2.type='password';i2.placeholder='Password';
+const b=mk('button','mb','Sign in');b.onclick=()=>{S.signed=true;renderMC()};
+el.append(l1,i1,l2,i2,b)}
+else{el.append(mk('h2','',t[0]),mk('p','mut2',t[1]));for(let i=0;i<4;i++){const l=mk('div','ln');l.style.width=(90-i*12)+'%';el.append(l)}}
+}
+async function go(text){
+ const v=text.trim();if(!v||!S.on||S.busy)return;
+ const session=S;session.busy=true;session.msgs.push({a:0,t:v,ts:stamp()});session.q=[];render();sync();
+ await new Promise(resolve=>setTimeout(resolve,650));
+ if(session!==S||!S.on)return;
+ try{await respond(v.toUpperCase())}finally{if(session===S){session.busy=false;sync();render()}}
+}
+function homeChoices(){
+ const t=$('#topic');
+ return [...(t&&t.value?[[t.selectedOptions[0].text,'GUIDE '+t.value]]:[]),['ICM Learning Modules','GUIDES'],['Request a visit','REQUEST VISIT'],['My visits','NEXT VISIT'],['Reminders','REMINDERS'],['Test results','RESULTS'],['Care team','CARE']];
+}
+function withResume(options){return (S.slide && S.slide!=='mod-menu')?[['Resume guide','RESUME GUIDE'],...options]:options}
+function opener(returning){
+ if(returning){
+  const back=['Of course, take your time. Here are your options whenever you’re ready:','Right here with you. What would you like to look at next?','Whenever you’re ready, here’s what I can look at next:'];
+  return back[Math.floor(Math.random()*back.length)];
+ }
+ const h=new Date().getHours();
+ const timed=h>=5&&h<12?[
+  'Good morning from UTSW ICM. I’m here to help you take things one step at a time. Here’s how I can help today:',
+  'Good morning from UTSW ICM. Whenever you feel ready, I’m here to help make today a little easier. What would be helpful right now?'
+ ]:h>=12&&h<17?[
+  'Good afternoon from UTSW ISM. Here’s what I can help with:',
+  'Good afternoon from UTSW ICM. Take your time, I’m right here if you need information or support today. Where would you like to start?'
+ ]:h>=17&&h<22?[
+  'Good evening, it’s okay to take things one question at a time. Here’s how I can support you:',
+  'Good evening from UTSW ICM. You don’t have to figure everything out at once, what would help most right now?'
+ ]:[
+  'Hi there, if you’re up thinking through things tonight, I’m here whenever you need a hand. Here’s what I can help with:',
+  'Hello from UTSW ICM. Let’s take things one step at a time. Where would you like to start?'
+ ];
+ const anytime=[
+  'Hi, UTSW ICM is glad you’re here. Going through treatment and recovery takes a lot, I can help you take it one step at a time. Here’s how I can help:',
+  'Welcome to UTSW ICM. There’s no rush at all, feel free to explore this feature at your own pace or ask whatever’s on your mind:',
+  'Hi there, I’m here to help make things a little easier. What would be most useful?'
+ ];
+ const pool=[...timed,...anytime];
+ return pool[Math.floor(Math.random()*pool.length)];
+}
+function menu(){
+ const returning=S.msgs.length>0;
+ S.ctx='home';
+ const opts=withResume(homeChoices());
+ S.q=opts;
+ const list=opts.map(([label],i)=>(i+1)+' = '+label).join('\n');
+ say(opener(returning)+'\n\n'+list+'\n\nReply with a number or type a question.');
+}
+function visitRequest(){
+ S.ctx='visit-time';say('What time of day works best for your visit? Reply Morning, Afternoon, No preference, or Cancel.');S.q=[['Morning','Morning'],['Afternoon','Afternoon'],['No preference','No preference'],['Cancel','Cancel']];
+}
+function results(){S.ctx=null;say('Your results aren’t sent by text to protect your privacy. You can view them securely in MyChart:',{lk:'results'});S.q=MENUQ}
+function appt(){S.ctx=null;say(S.request?'Your appointment request is pending. Preferred time: '+S.request+'. A visit time has yet to be officially booked.':'You have no scheduled visits in this demo.');S.q=withResume(S.request?MENUQ:[['Request a visit','REQUEST VISIT'],...MENUQ])}
+function rem(){S.ctx=null;say('Your visit reminders are '+reminders()+'.');S.q=MENUQ}
+function care(){S.ctx=null;say('This demo inbox is unmonitored. Contact your care team directly through your usual channel.');S.q=MENUQ}
+function mods(){S.ctx='mod';S.slide='mod-menu';say(guideReply('menu'));S.q=modules.map(m=>[String(m.number),'GUIDE '+m.number])}
+async function respond(T){
+if(T==='STOP'){say('Texts are off.');S.on=false;S.q=[];$('#settings').open=true;sync();return}
+if(T==='MENU')return menu();
+if(S.ctx==='home' && /^\d+$/.test(T)){const pick=withResume(homeChoices())[Number(T)-1];if(pick)T=pick[1]}
+if(S.ctx==='mod' && (S.slide==='mod-menu' || !S.slide) && /^(?:[1-9]|10)$/.test(T.trim())){T='GUIDE '+T.trim()}
+const draft=S.ctx==='visit-time'||S.ctx==='visit-review';
+const clean=T.replace(/[’']/g,'').replace(/[^A-Z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+const resume=S.slide && S.slide!=='mod-menu' && /^(?:RESUME(?: (?:MY |THE )?(?:GUIDE|STEPS))?|BACK TO (?:THE )?(?:GUIDE|STEPS)|CONTINUE(?: THE GUIDE)?)$/.test(clean);
+if(resume){
+ S.ctx='mod';
+ const previous=S.msgs.slice().reverse().find(m=>m.slide?.id===S.slide);
+ if(previous){say(previous.t,{slide:previous.slide});S.q=previous.slide.q||[];return}
+ T='NEXT';
+}
+const visit=/\b(?:VISITS?|APPOINTMENTS?|APPTS?)\b/.test(clean);
+const scheduling=visit && /\b(?:REQUEST|MAKE|BOOK|SCHEDULE|ARRANGE|SET UP)\b/.test(clean);
+if(scheduling)return S.request?appt():visitRequest();
+if(visit && (/\b(?:WHEN|WHAT TIME|WHAT DAY|WHAT DATE|SCHEDULED|UPCOMING|NEXT|STATUS)\b/.test(clean)||/^(MY )?(VISITS?|APPOINTMENTS?|APPTS?)$/.test(clean)))return appt();
+if(draft && !resume){
+ const polite=clean.replace(/^(?:PLEASE |YES PLEASE )/,'').replace(/ (?:PLEASE|THANKS|THANK YOU)$/,'');
+ const decline=/^(?:NO|NOPE|CANCEL(?: IT| THE REQUEST)?|NEVER MIND|NEVERMIND|DONT SEND(?: IT)?|DO NOT SEND(?: IT)?)$/.test(polite);
+ if(decline){S.ctx=null;say('Okay, I’ve canceled this draft.');S.q=withResume(MENUQ);return}
+ const times=['MORNING','AFTERNOON'].filter(time=>clean.split(' ').includes(time));
+ const either=/\b(?:NO PREFERENCE|EITHER|ANYTIME|ANY TIME)\b/.test(clean);
+ if((times.length===1||either)&& !/\b(?:NOT|EXCEPT|CANT|CANNOT|DONT|NO MORNING|NO AFTERNOON)\b/.test(clean)){
+  S.time=either?'no preference':times[0].toLowerCase();S.ctx='visit-review';say('Preferred time: '+S.time+'. Send this simulated appointment request?');S.q=[['Send request','SEND REQUEST'],['Change time','CHANGE TIME'],['Cancel','CANCEL']];return
+ }
+ if(S.ctx==='visit-review'){
+  if(/^(?:CHANGE(?: THE)? TIME|EDIT|PICK ANOTHER TIME)$/.test(polite))return visitRequest();
+  if(/^(?:YES|YEAH|YEP|SURE|OK|OKAY|GO AHEAD|CONFIRM|SEND(?: IT| REQUEST| THE REQUEST)?|YES SEND(?: IT)?)$/.test(polite)){
+   S.request=S.time;S.ctx=null;say('Request saved in this demo. Status: pending. Preferred time: '+S.request+'.');S.q=withResume([['My visits','NEXT VISIT'],...MENUQ]);return
+  }
+  say('Should I send the request? Reply yes, change the time, or cancel.');S.q=[['Send request','SEND REQUEST'],['Change time','CHANGE TIME'],['Cancel','CANCEL']];return
+ }
+ say('Would morning or afternoon work, or do you have no preference?');S.q=[['Morning','MORNING'],['Afternoon','AFTERNOON'],['No preference','NO PREFERENCE'],['Cancel','CANCEL']];return
+}
+if(S.request && !S.ctx && /^(?:SEND|SEND IT|SEND REQUEST)$/.test(clean))return appt();
+if(T==='REMINDERS')return rem();
+if(/^(MODULES?|GUIDES?|HELP)$/.test(T))return mods();
+if(/^(CARE|CARE TEAM)$/.test(T))return care();
+if(/^(LAB RESULTS?|TEST RESULTS?|RESULTS)$/.test(T))return results();
+const c=S.ctx;
+if(c==='rem'){
+if(T==='C'){S.ctx=null;say('Thanks, you’re confirmed. See you then.');S.q=MENUQ;return}
+if(T==='R')return S.request?appt():visitRequest();}
+if(c!=='mod'){
+if(T==='1')return mods();
+if(T==='2'||/^(APPOINTMENT|NEXT VISIT)$/.test(T))return appt();
+if(T==='3'||/^REMINDERS?$/.test(T))return rem();
+if(T==='4')return results();
+if(T==='5')return care();
+}
+S.ctx='mod';
+const session=S;
+try{
+ const response=await fetch('/api/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:T,previous:S.slide})});
+ if(!response.ok)throw Error();
+ const reply=await response.json();
+ if(S!==session||!S.on)return;
+ say(reply.text,{slide:reply});S.slide=reply.id;S.q=reply.q||[];
+}catch{if(S===session&&S.on){say('The guide is unavailable. Please try again.');S.ping=false;S.q=MENUQ}}
+
+}
+$('#on').onclick=()=>{unlockAudio();S={on:true,ctx:null,msgs:[],q:[],request:S.request};$('#settings').open=false;menu();sync();render();$('#ti').focus()};
+$('#off').onclick=()=>{S={...S,on:false,busy:false,q:[]};$('#settings').open=true;sync();render()};
+if($('#topic'))$('#topic').onchange=()=>{if(S.on&&(!S.ctx||S.ctx==='home')&&!S.busy){S.q=withResume(homeChoices());render()}};
+$('#sRem').onclick=()=>{unlockAudio();S.ctx='rem';say('UTSW ICM visit reminder: Thursday at 10 AM. Reply C to confirm or R to reschedule. Details:',{lk:'appt'});S.q=[['C','C'],['R','R']];render()};
+$('#sRes').onclick=()=>{unlockAudio();S.ctx=null;say('UTSW ICM: you have a new result in MyChart. For your privacy, results aren’t sent by text. View it securely:',{lk:'results'});S.q=MENUQ;render()};
+$('#rst').onclick=reset;
+$('#f').onsubmit=e=>{e.preventDefault();unlockAudio();const i=$('#ti');go(i.value);i.value=''};
+$('#bk').onclick=()=>{S.mc=null;render()};
+$('.dev')?.addEventListener('animationend',e=>{if(e.animationName==='dev-flash')e.currentTarget.classList.remove('ping')});
+syncClock();setInterval(syncClock,15000);
+reset();
